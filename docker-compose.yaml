@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16
+    container_name: user-service
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgres/data
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=mysupersecretpassword
+      - POSTGRES_DB=user_service
+
+volumes:
+  pg_data:
