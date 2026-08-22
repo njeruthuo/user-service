@@ -1,0 +1,32 @@
+name: Go CI
+
+on:
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true # Caches go modules to speed up subsequent runs
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run linter / vet
+        run: go vet ./...
+
+      - name: Build project
+        run: go build -v ./...
+
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.out ./...
