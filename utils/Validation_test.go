@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"fmt"
 	"testing"
 )
 
@@ -27,7 +26,7 @@ func Test_Valid_Emails(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := IsValidEmail(tt.parameter)
 			if got != tt.expectedResult {
-				fmt.Errorf("IsValidEmail(%q) = %v; want %v", tt.parameter, got, tt.expectedResult)
+				t.Errorf("IsValidEmail(%q) = %v; want %v", tt.parameter, got, tt.expectedResult)
 			}
 		})
 
@@ -65,7 +64,7 @@ func Test_Valid_Phone_Number(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := IsValidPhone(tt.parameter)
 			if got != tt.expectedResult {
-				fmt.Errorf("IsValidEmail(%q) = %v; want %v", tt.parameter, got, tt.expectedResult)
+				t.Errorf("IsValidEmail(%q) = %v; want %v", tt.parameter, got, tt.expectedResult)
 			}
 		})
 
