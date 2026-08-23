@@ -5,6 +5,7 @@ package authentication
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -23,9 +24,10 @@ type AuthJsonResponse struct {
 }
 
 type RegisterRequest struct {
-	Email    string `json:"email"`
-	Phone    string `json:"phone"`
-	Password string `json:"password"`
+	Email       string `json:"email"`
+	Phone       string `json:"phone"`
+	Password    string `json:"password"`
+	LoginMethod string `json:"loginMethod"`
 }
 
 type UserResponse struct {
@@ -37,6 +39,11 @@ type UserResponse struct {
 	EmailVerified bool      `json:"email_verified"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+type UserLoginResponse struct {
+	AccessToken  string `json:"accessToken"`
+	RefreshToken string `json:"refreshToken"`
 }
 
 func (h *DBHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
@@ -144,7 +151,135 @@ func (h *DBHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(user)
 }
 
-func (h *DBHandler) LoginHandler(w http.ResponseWriter, r *http.Request)          {}
+func (h *DBHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	var loginRequest RegisterRequest
+	err := json.NewDecoder(r.Body).Decode(&loginRequest)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+
+		json.NewEncoder(w).Encode(AuthJsonResponse{
+			Message: "Invalid request body",
+		})
+		return
+	}
+
+	if loginRequest.LoginMethod == "email" {
+		if !utils.IsValidEmail(loginRequest.Email) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+
+			json.NewEncoder(w).Encode(AuthJsonResponse{
+				Message: "Invalid email",
+			})
+			return
+		}
+	} else {
+		if !utils.IsValidPhone(loginRequest.Phone) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+
+			json.NewEncoder(w).Encode(AuthJsonResponse{
+				Message: "Invalid phone",
+			})
+			return
+		}
+	}
+
+	var (
+		userUser UserResponse
+		query    string
+		arg      string
+	)
+
+	if loginRequest.LoginMethod == "email" {
+		query = `
+			SELECT id, email, phone, password_hash, status, phone_verified, email_verified, created_at, updated_at 
+			FROM users 
+			WHERE email = $1`
+		arg = loginRequest.Email
+	} else {
+		query = `
+			SELECT id, email, phone, password_hash, status, phone_verified, email_verified, created_at, updated_at 
+			FROM users 
+			WHERE phone = $1`
+		arg = loginRequest.Phone
+	}
+
+	var passwordHash string
+
+	err = h.DB.QueryRow(query, arg).Scan(
+		&userUser.ID,
+		&userUser.Email,
+		&userUser.Phone,
+		&passwordHash,
+		&userUser.Status,
+		&userUser.PhoneVerified,
+		&userUser.EmailVerified,
+		&userUser.CreatedAt,
+		&userUser.UpdatedAt,
+	)
+
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		if errors.Is(err, sql.ErrNoRows) {
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(AuthJsonResponse{
+				Message: "Invalid credentials",
+			})
+			return
+		}
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(AuthJsonResponse{
+			Message: "Internal server error",
+		})
+		return
+	}
+
+	if !utils.CheckPasswordHash(loginRequest.Password, passwordHash) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(AuthJsonResponse{
+			Message: "Invalid credentials",
+		})
+		return
+	}
+
+	if userUser.Status != "active" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(AuthJsonResponse{
+			Message: "Account is not active",
+		})
+		return
+	}
+
+	tokens, err := utils.GenerateTokenPair(
+		userUser.ID.String(),
+		userUser.Email,
+		userUser.Phone,
+	)
+
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(AuthJsonResponse{
+			Message: "Internal server error",
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	json.NewEncoder(w).Encode(UserLoginResponse{
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
+	})
+}
 func (h *DBHandler) LogoutHandler(w http.ResponseWriter, r *http.Request)         {}
 func (h *DBHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Request)   {}
 func (h *DBHandler) ForgotPasswordHandler(w http.ResponseWriter, r *http.Request) {}
