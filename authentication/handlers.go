@@ -272,11 +272,7 @@ func (h *DBHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		RefreshToken: tokens.RefreshToken,
 	})
 }
-func (h *DBHandler) LogoutHandler(w http.ResponseWriter, r *http.Request) {}
 
-// RefreshTokenHandler exchanges a valid refresh token for a new token pair.
-// Tokens rotate on every use: the presented token is revoked as its
-// replacement is issued, inside one transaction.
 func (h *DBHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
@@ -439,6 +435,4 @@ func (h *DBHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-func (h *DBHandler) ForgotPasswordHandler(w http.ResponseWriter, r *http.Request) {}
-func (h *DBHandler) ChangePasswordHandler(w http.ResponseWriter, r *http.Request) {}
-func (h *DBHandler) ResetPasswordHandler(w http.ResponseWriter, r *http.Request)  {}
+func (h *DBHandler) LogoutHandler(w http.ResponseWriter, r *http.Request) {}
