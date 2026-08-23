@@ -1,15 +1,12 @@
 package utils
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
 )
 
 const (
@@ -55,10 +52,6 @@ func signToken(userID, email, phone, tokenType string, ttl time.Duration) (strin
 		Phone:     phone,
 		TokenType: tokenType,
 		RegisteredClaims: jwt.RegisteredClaims{
-			// A unique id per token, so tokens minted for the same user in
-			// the same second are still distinct values. Rotation depends on
-			// the replacement differing from the token it replaces.
-			ID:        uuid.NewString(),
 			Subject:   userID,
 			Issuer:    tokenIssuer,
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -112,12 +105,4 @@ func ParseToken(tokenString string) (*Claims, error) {
 	}
 
 	return &claims, nil
-}
-
-// HashToken returns the digest stored in place of a token. Tokens are long,
-// high entropy strings, so a fast digest is both safe and directly lookupable,
-// unlike the bcrypt hashing used for user chosen passwords.
-func HashToken(token string) string {
-	digest := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(digest[:])
 }
