@@ -1,15 +1,10 @@
 package authentication
 
 import (
-<<<<<<< Updated upstream
-=======
 	"database/sql"
 	"database/sql/driver"
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -17,7 +12,9 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"github.com/njeruthuo/user-service/utils"
 )
 
 func Test_Register_Requires_Email_And_Phone(t *testing.T) {
@@ -145,8 +142,6 @@ func Test_Register_No_Account_Duplicates(t *testing.T) {
 		}
 	})
 }
-<<<<<<< Updated upstream
-=======
 
 const (
 	testPassword = "mygoodpassword"
@@ -900,7 +895,3 @@ func Test_RefreshTokenHandler_DatabasePaths(t *testing.T) {
 		}
 	})
 }
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes

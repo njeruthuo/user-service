@@ -5,6 +5,7 @@ package authentication
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -23,9 +24,10 @@ type AuthJsonResponse struct {
 }
 
 type RegisterRequest struct {
-	Email    string `json:"email"`
-	Phone    string `json:"phone"`
-	Password string `json:"password"`
+	Email       string `json:"email"`
+	Phone       string `json:"phone"`
+	Password    string `json:"password"`
+	LoginMethod string `json:"loginMethod"`
 }
 
 type UserResponse struct {
@@ -39,8 +41,6 @@ type UserResponse struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
-<<<<<<< Updated upstream
-=======
 type UserLoginResponse struct {
 	AccessToken  string `json:"accessToken"`
 	RefreshToken string `json:"refreshToken"`
@@ -81,10 +81,6 @@ func writeJSONMessage(w http.ResponseWriter, status int, message string) {
 	})
 }
 
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 func (h *DBHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
@@ -175,11 +171,6 @@ func (h *DBHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(user)
 }
 
-<<<<<<< Updated upstream
-func (h *DBHandler) LoginHandler(w http.ResponseWriter, r *http.Request)          {}
-func (h *DBHandler) LogoutHandler(w http.ResponseWriter, r *http.Request)         {}
-func (h *DBHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Request)   {}
-=======
 func (h *DBHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
@@ -448,10 +439,6 @@ func (h *DBHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 func (h *DBHandler) ForgotPasswordHandler(w http.ResponseWriter, r *http.Request) {}
 func (h *DBHandler) ChangePasswordHandler(w http.ResponseWriter, r *http.Request) {}
 func (h *DBHandler) ResetPasswordHandler(w http.ResponseWriter, r *http.Request)  {}
