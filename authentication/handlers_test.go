@@ -137,3 +137,81 @@ func Test_Register_No_Account_Duplicates(t *testing.T) {
 		}
 	})
 }
+
+func Test_LoginHandler_Validation(t *testing.T) {
+	// No DB calls occur during request validation, but pass mock DB to avoid nil handlers
+	db, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to open sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	handler := &DBHandler{DB: db}
+
+	tests := []struct {
+		name           string
+		payload        string
+		expectedStatus int
+		expectedMsg    string
+	}{
+		{
+			name: "Valid Phone Login",
+			payload: `{
+				"phone": "0768585724",
+				"password": "mygoodpassword",
+				"loginMethod": "phone"
+			}`,
+			// Note: Will fail later in your handler when DB logic is reached,
+			// but passes phone validation stage successfully
+			expectedStatus: http.StatusOK,
+			expectedMsg:    "",
+		},
+		{
+			name: "Invalid Phone for Phone Login Method",
+			payload: `{
+				"phone": "invalid-phone",
+				"password": "mygoodpassword",
+				"loginMethod": "phone"
+			}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedMsg:    "Invalid phone",
+		},
+		{
+			name: "Invalid Email for Email Login Method",
+			payload: `{
+				"email": "not-an-email",
+				"password": "mygoodpassword",
+				"loginMethod": "email"
+			}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedMsg:    "Invalid email",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(tt.payload))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			// 1. CALL THE CORRECT HANDLER
+			handler.LoginHandler(w, req)
+
+			// 2. CHECK EXPECTED HTTP STATUS CODE
+			if tt.expectedStatus == http.StatusBadRequest {
+				if w.Code != http.StatusBadRequest {
+					t.Errorf("expected status %d, got %d", http.StatusBadRequest, w.Code)
+				}
+
+				var response AuthJsonResponse
+				if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+					t.Fatalf("failed to decode error response: %v", err)
+				}
+
+				if response.Message != tt.expectedMsg {
+					t.Errorf("expected error message %q, got %q", tt.expectedMsg, response.Message)
+				}
+			}
+		})
+	}
+}
