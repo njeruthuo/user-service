@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/njeruthuo/user-service/authentication"
 	"github.com/njeruthuo/user-service/health"
@@ -14,6 +15,10 @@ import (
 )
 
 func main() {
+	if err := godotenv.Load(); err != nil {
+		log.Println("no .env file found, using environment variables")
+	}
+
 	db, err := ConnectDatabase()
 	if err != nil {
 		log.Fatal(err)
