@@ -1,0 +1,11 @@
+name: Run govulncheck
+on:
+    push:
+        branches: [dev, main]
+
+jobs:
+    govulncheck:
+        runs-on: ubuntu-latest
+        steps:
+            - id: govulncheck
+              uses: golang/govulncheck-action@v1
