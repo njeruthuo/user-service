@@ -133,33 +133,26 @@ func (h *DBHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		&user.UpdatedAt,
 	)
 
-	if pqErr, ok := err.(*pq.Error); ok {
-		if pqErr.Code == "23505" {
+	if err != nil {
+		// A unique violation names the column the caller has to change; every
+		// other failure is ours, and must not be answered with a created user.
+		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
 			switch pqErr.Constraint {
 			case "users_email_key":
-				w.WriteHeader(http.StatusConflict)
-
-				json.NewEncoder(w).Encode(AuthJsonResponse{
-					Message: "Email is already registered",
-				})
+				writeJSONMessage(w, http.StatusConflict, "Email is already registered")
 
 			case "users_phone_key":
-				w.WriteHeader(http.StatusConflict)
-
-				json.NewEncoder(w).Encode(AuthJsonResponse{
-					Message: "Phone number is already registered",
-				})
+				writeJSONMessage(w, http.StatusConflict, "Phone number is already registered")
 
 			default:
-				w.WriteHeader(http.StatusConflict)
-
-				json.NewEncoder(w).Encode(AuthJsonResponse{
-					Message: "User already exists",
-				})
+				writeJSONMessage(w, http.StatusConflict, "User already exists")
 			}
 
 			return
 		}
+
+		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		return
 	}
 
 	user.Email = req.Email
@@ -435,4 +428,42 @@ func (h *DBHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-func (h *DBHandler) LogoutHandler(w http.ResponseWriter, r *http.Request) {}
+func (h *DBHandler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	var req RefreshTokenRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONMessage(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.RefreshToken == "" {
+		writeJSONMessage(w, http.StatusBadRequest, "Refresh token is required")
+		return
+	}
+
+	claims, err := utils.ParseToken(req.RefreshToken)
+	if err != nil {
+		writeJSONMessage(w, http.StatusUnauthorized, "Invalid refresh token")
+		return
+	}
+
+	if claims.TokenType != utils.RefreshTokenType {
+		writeJSONMessage(w, http.StatusUnauthorized, "Invalid refresh token")
+		return
+	}
+
+	if _, err := h.DB.Exec(
+		`
+		UPDATE refresh_tokens
+		SET revoked_at = NOW()
+		WHERE token_hash = $1 AND revoked_at IS NULL`,
+		utils.HashToken(req.RefreshToken),
+	); err != nil {
+		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	writeJSONMessage(w, http.StatusOK, "Logged out successfully")
+}
