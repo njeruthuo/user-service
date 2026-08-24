@@ -3,13 +3,14 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"os"
 )
 
-const (
-	DatabaseUser     = "postgres"
-	DatabasePassword = "mysupersecretpassword"
-	DatabaseHost     = "localhost"
-	DatabaseName     = "user_service"
+var (
+	DatabaseName     = os.Getenv("DatabaseName")
+	DatabaseUser     = os.Getenv("DatabaseUser")
+	DatabaseHost     = os.Getenv("DatabaseHost")
+	DatabasePassword = os.Getenv("DatabasePassword")
 )
 
 func ConnectDatabase() (*sql.DB, error) {
