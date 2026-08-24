@@ -12,10 +12,6 @@ const (
 	DatabaseName     = "user_service"
 )
 
-var (
-	db *sql.DB
-)
-
 func ConnectDatabase() (*sql.DB, error) {
 	dbInfo := fmt.Sprintf(
 		"user=%s password=%s host=%s dbname=%s sslmode=disable",
