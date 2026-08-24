@@ -9,6 +9,7 @@ import (
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 	"github.com/njeruthuo/user-service/authentication"
+	"github.com/njeruthuo/user-service/health"
 	"github.com/njeruthuo/user-service/passwdmgt"
 )
 
@@ -28,7 +29,7 @@ func main() {
 
 	router := mux.NewRouter()
 
-	router.HandleFunc("/health", GetHealth).Methods(http.MethodGet)
+	router.HandleFunc("/health", health.GetHealth).Methods(http.MethodGet)
 	router.HandleFunc("/auth/login", authHandler.LoginHandler).Methods(http.MethodPost)
 	router.HandleFunc("/auth/logout", authHandler.LogoutHandler).Methods(http.MethodPost)
 	router.HandleFunc("/auth/register", authHandler.RegisterHandler).Methods(http.MethodPost)
