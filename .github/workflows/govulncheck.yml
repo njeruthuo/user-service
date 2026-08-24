@@ -1,5 +1,8 @@
 name: Run govulncheck
-on: [push]
+on:
+    push:
+        branches: [dev, main]
+
 jobs:
     govulncheck:
         runs-on: ubuntu-latest
