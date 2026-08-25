@@ -1,7 +1,19 @@
 package messaging
 
 import (
+	"encoding/json"
+	"fmt"
+	"os"
+
 	amqp "github.com/rabbitmq/amqp091-go"
+)
+
+// Queue names double as routing keys on the default exchange: each queue
+// gets an implicit binding keyed on its own name, so publishing to exchange
+// "" with key <queue name> delivers straight to that queue.
+const (
+	PasswordResetEmailQueue = "password_reset_email"
+	PasswordResetSMSQueue   = "password_reset_sms"
 )
 
 type RabbitMQ struct {
@@ -10,7 +22,12 @@ type RabbitMQ struct {
 }
 
 func NewRabbitMQ() (*RabbitMQ, error) {
-	conn, err := amqp.Dial("RABBITMQ_URL")
+	url := os.Getenv("RABBITMQ_URL")
+	if url == "" {
+		return nil, fmt.Errorf("RABBITMQ_URL is not set")
+	}
+
+	conn, err := amqp.Dial(url)
 	if err != nil {
 		return nil, err
 	}
@@ -34,4 +51,35 @@ func (r *RabbitMQ) Close() {
 
 func (r *RabbitMQ) String() string {
 	return "Rabbitmq connected"
+}
+
+
+func (r *RabbitMQ) PublishJSON(queueName string, payload any) error {
+	if _, err := r.Ch.QueueDeclare(
+		queueName,
+		true,  // durable: survives a broker restart
+		false, // autoDelete
+		false, // exclusive
+		false, // noWait
+		nil,   // args
+	); err != nil {
+		return err
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	return r.Ch.Publish(
+		"",        // default exchange
+		queueName, // routing key = queue name
+		false,     // mandatory
+		false,     // immediate
+		amqp.Publishing{
+			ContentType:  "application/json",
+			DeliveryMode: amqp.Persistent,
+			Body:         body,
+		},
+	)
 }

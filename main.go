@@ -11,6 +11,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/njeruthuo/user-service/authentication"
 	"github.com/njeruthuo/user-service/health"
+	"github.com/njeruthuo/user-service/messaging"
 	"github.com/njeruthuo/user-service/passwdmgt"
 )
 
@@ -24,12 +25,20 @@ func main() {
 	}
 	defer db.Close()
 
+	mq, err := messaging.NewRabbitMQ()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer mq.Close()
+
 	authHandler := authentication.DBHandler{
 		DB: db,
 	}
 	passwdHandler := passwdmgt.DBHandler{
 		DB: db,
+		MQ: mq,
 	}
+	passwdHandler.Deliverer = &passwdHandler
 
 	router := mux.NewRouter()
 

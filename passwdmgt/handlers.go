@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -15,45 +16,58 @@ import (
 
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
+	"github.com/njeruthuo/user-service/messaging"
 	"github.com/njeruthuo/user-service/utils"
 )
 
 const (
-	// A reset link is emailed or texted, so it lives long enough for the
-	// message to arrive and be acted on, and no longer.
-	ResetTokenTTL = time.Hour
-
-	// The row type this package writes to verification_tokens.
-	passwordResetType = "password_reset"
-
-	// bcrypt silently ignores everything past its 72 byte input limit, so a
-	// longer password would only be as strong as its first 72 bytes.
-	minPasswordLength = 8
-	maxPasswordLength = 72
-
-	// Answered for every forgot-password request, whether or not the address
-	// belongs to an account, so the endpoint cannot be used to discover who
-	// has registered.
+	ResetTokenTTL         = time.Hour
+	passwordResetType     = "password_reset"
 	resetRequestedMessage = "If the account exists, password reset instructions have been sent"
 )
 
-// ResetTokenDeliverer hands a freshly minted reset token to whatever channel
-// the account is reachable on. The token is delivered, never stored in the
-// clear and never returned to the caller.
 type ResetTokenDeliverer interface {
 	DeliverPasswordReset(email, phone, token string) error
 }
 
-type DBHandler struct {
-	DB *sql.DB
+type publisher interface {
+	PublishJSON(queueName string, payload any) error
+}
 
-	// Optional. With no deliverer configured the token is still minted and
-	// stored, and the attempt is logged without the token itself.
+type DBHandler struct {
+	DB        *sql.DB
 	Deliverer ResetTokenDeliverer
+	MQ        publisher
+}
+
+type passwordResetMessage struct {
+	Email string `json:"email,omitempty"`
+	Phone string `json:"phone,omitempty"`
+	Token string `json:"token"`
 }
 
 func (handler *DBHandler) DeliverPasswordReset(email, phone, token string) error {
-	return nil
+	var errs []error
+
+	if email != "" {
+		if err := handler.MQ.PublishJSON(messaging.PasswordResetEmailQueue, passwordResetMessage{
+			Email: email,
+			Token: token,
+		}); err != nil {
+			errs = append(errs, fmt.Errorf("publish email reset: %w", err))
+		}
+	}
+
+	if phone != "" {
+		if err := handler.MQ.PublishJSON(messaging.PasswordResetSMSQueue, passwordResetMessage{
+			Phone: phone,
+			Token: token,
+		}); err != nil {
+			errs = append(errs, fmt.Errorf("publish sms reset: %w", err))
+		}
+	}
+
+	return errors.Join(errs...)
 }
 
 type JsonResponse struct {
@@ -75,9 +89,6 @@ type ChangePasswordRequest struct {
 	NewPassword     string `json:"newPassword"`
 }
 
-// newResetToken is a variable so tests can drive both the value it returns and
-// its failure path. It yields 256 bits of entropy in a URL safe form, which is
-// what makes storing only a fast digest of it safe.
 var newResetToken = func() (string, error) {
 	raw := make([]byte, 32)
 
@@ -99,18 +110,6 @@ func writeJSONMessage(w http.ResponseWriter, status int, message string) {
 
 // validatePassword reports why a password is unusable, or an empty string when
 // it is fine.
-func validatePassword(password string) string {
-	if len(password) < minPasswordLength {
-		return "Password must be at least 8 characters"
-	}
-
-	// Measured in bytes, because that is the limit bcrypt actually imposes.
-	if len(password) > maxPasswordLength {
-		return "Password must be at most 72 bytes"
-	}
-
-	return ""
-}
 
 // bearerToken pulls the credential out of an Authorization header, returning
 // an empty string when the header is missing or not a bearer scheme.
@@ -222,8 +221,6 @@ func (h *DBHandler) ForgotPasswordHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Outstanding resets are retired first, so requesting a new link cannot
-	// leave several usable ones in flight.
 	if _, err := h.DB.Exec(
 		`
 		UPDATE verification_tokens
@@ -255,15 +252,12 @@ func (h *DBHandler) ForgotPasswordHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	if h.Deliverer == nil {
-		// Never log the token: the log would then be as good as the reset link.
 		log.Printf("password reset requested for user %s, no deliverer configured", userID)
 		writeJSONMessage(w, http.StatusOK, resetRequestedMessage)
 		return
 	}
 
 	if err := h.Deliverer.DeliverPasswordReset(email, phone, token); err != nil {
-		// The token is already stored, so a delivery failure is ours to see
-		// and not something to report back differently.
 		log.Printf("failed to deliver password reset for user %s: %v", userID, err)
 	}
 
@@ -288,7 +282,7 @@ func (h *DBHandler) ResetPasswordHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if message := validatePassword(req.NewPassword); message != "" {
+	if message := utils.ValidatePassword(req.NewPassword); message != "" {
 		writeJSONMessage(w, http.StatusBadRequest, message)
 		return
 	}
@@ -422,7 +416,7 @@ func (h *DBHandler) ChangePasswordHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if message := validatePassword(req.NewPassword); message != "" {
+	if message := utils.ValidatePassword(req.NewPassword); message != "" {
 		writeJSONMessage(w, http.StatusBadRequest, message)
 		return
 	}

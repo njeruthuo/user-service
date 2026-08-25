@@ -6,6 +6,12 @@ import (
 	"strings"
 )
 
+const (
+	minPasswordLength     = 8
+	maxPasswordLength     = 72
+	
+)
+
 func IsValidEmail(email string) bool {
 	email = strings.TrimSpace(email)
 
@@ -25,4 +31,17 @@ var phoneRegex = regexp.MustCompile(`^(?:\+254\s\d{3}\s\d{3}\s\d{3}|07\d{8}|\+25
 
 func IsValidPhone(phone string) bool {
 	return phoneRegex.MatchString(phone)
+}
+
+func ValidatePassword(password string) string {
+	if len(password) < minPasswordLength {
+		return "Password must be at least 8 characters"
+	}
+
+	// Measured in bytes, because that is the limit bcrypt actually imposes.
+	if len(password) > maxPasswordLength {
+		return "Password must be at most 72 bytes"
+	}
+
+	return ""
 }
