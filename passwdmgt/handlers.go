@@ -52,6 +52,10 @@ type DBHandler struct {
 	Deliverer ResetTokenDeliverer
 }
 
+func (handler *DBHandler) DeliverPasswordReset(email, phone, token string) error {
+	return nil
+}
+
 type JsonResponse struct {
 	Message string
 }
