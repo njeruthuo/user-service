@@ -96,6 +96,11 @@ func (h *DBHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if message := utils.ValidatePassword(req.Password); message != "" {
+		writeJSONMessage(w, http.StatusBadRequest, message)
+		return
+	}
+
 	passwordHash, err := utils.PasswordDigest(req.Password)
 
 	if err != nil {

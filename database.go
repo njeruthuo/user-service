@@ -3,16 +3,28 @@ package main
 import (
 	"database/sql"
 	"fmt"
-)
-
-const (
-	DatabaseUser     = "postgres"
-	DatabasePassword = "mysupersecretpassword"
-	DatabaseHost     = "localhost"
-	DatabaseName     = "user_service"
+	"os"
 )
 
 func ConnectDatabase() (*sql.DB, error) {
+	var (
+		DatabaseName     = os.Getenv("DatabaseName")
+		DatabaseUser     = os.Getenv("DatabaseUser")
+		DatabaseHost     = os.Getenv("DatabaseHost")
+		DatabasePassword = os.Getenv("DatabasePassword")
+	)
+
+	for name, value := range map[string]string{
+		"DatabaseUser":     DatabaseUser,
+		"DatabasePassword": DatabasePassword,
+		"DatabaseHost":     DatabaseHost,
+		"DatabaseName":     DatabaseName,
+	} {
+		if value == "" {
+			return nil, fmt.Errorf("%s is not set", name)
+		}
+	}
+
 	dbInfo := fmt.Sprintf(
 		"user=%s password=%s host=%s dbname=%s sslmode=disable",
 		DatabaseUser,
