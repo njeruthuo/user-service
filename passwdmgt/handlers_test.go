@@ -17,6 +17,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/njeruthuo/user-service/messaging"
 	"github.com/njeruthuo/user-service/utils"
 )
 
@@ -247,7 +248,7 @@ func Test_ValidatePassword(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := validatePassword(tt.password); got != tt.expected {
+			if got := utils.ValidatePassword(tt.password); got != tt.expected {
 				t.Errorf("expected %q, got %q", tt.expected, got)
 			}
 		})
@@ -1113,6 +1114,119 @@ func Test_ChangePasswordHandler_Transaction_Failures(t *testing.T) {
 			w := doChange(t, handler, bearer(pair), changePayload(testPassword, testNewPassword))
 
 			assertJSON(t, w, http.StatusInternalServerError, "Internal server error")
+		})
+	}
+}
+
+// publishedMessage records one call made to a recordingPublisher.
+type publishedMessage struct {
+	queue   string
+	payload any
+}
+
+// recordingPublisher stands in for the RabbitMQ channel DeliverPasswordReset
+// publishes through, so tests never need a live broker.
+type recordingPublisher struct {
+	calls  []publishedMessage
+	errFor map[string]error // queue name -> error to return for that queue
+}
+
+func (p *recordingPublisher) PublishJSON(queue string, payload any) error {
+	p.calls = append(p.calls, publishedMessage{queue: queue, payload: payload})
+	return p.errFor[queue]
+}
+
+func Test_DeliverPasswordReset(t *testing.T) {
+	tests := []struct {
+		name          string
+		email         string
+		phone         string
+		errFor        map[string]error
+		expectedCalls []publishedMessage
+		expectErr     bool
+	}{
+		{
+			name:  "Both email and phone publish to their own queue",
+			email: testEmail,
+			phone: testPhone,
+			expectedCalls: []publishedMessage{
+				{queue: messaging.PasswordResetEmailQueue, payload: passwordResetMessage{Email: testEmail, Token: "the-token"}},
+				{queue: messaging.PasswordResetSMSQueue, payload: passwordResetMessage{Phone: testPhone, Token: "the-token"}},
+			},
+		},
+		{
+			name:  "No email only publishes the SMS queue",
+			phone: testPhone,
+			expectedCalls: []publishedMessage{
+				{queue: messaging.PasswordResetSMSQueue, payload: passwordResetMessage{Phone: testPhone, Token: "the-token"}},
+			},
+		},
+		{
+			name:  "No phone only publishes the email queue",
+			email: testEmail,
+			expectedCalls: []publishedMessage{
+				{queue: messaging.PasswordResetEmailQueue, payload: passwordResetMessage{Email: testEmail, Token: "the-token"}},
+			},
+		},
+		{
+			name:  "Email publish fails but the SMS attempt still happens",
+			email: testEmail,
+			phone: testPhone,
+			errFor: map[string]error{
+				messaging.PasswordResetEmailQueue: errors.New("broker unavailable"),
+			},
+			expectedCalls: []publishedMessage{
+				{queue: messaging.PasswordResetEmailQueue, payload: passwordResetMessage{Email: testEmail, Token: "the-token"}},
+				{queue: messaging.PasswordResetSMSQueue, payload: passwordResetMessage{Phone: testPhone, Token: "the-token"}},
+			},
+			expectErr: true,
+		},
+		{
+			name:  "Both publishes fail",
+			email: testEmail,
+			phone: testPhone,
+			errFor: map[string]error{
+				messaging.PasswordResetEmailQueue: errors.New("broker unavailable"),
+				messaging.PasswordResetSMSQueue:   errors.New("broker unavailable"),
+			},
+			expectedCalls: []publishedMessage{
+				{queue: messaging.PasswordResetEmailQueue, payload: passwordResetMessage{Email: testEmail, Token: "the-token"}},
+				{queue: messaging.PasswordResetSMSQueue, payload: passwordResetMessage{Phone: testPhone, Token: "the-token"}},
+			},
+			expectErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pub := &recordingPublisher{errFor: tt.errFor}
+			handler := &DBHandler{MQ: pub}
+
+			err := handler.DeliverPasswordReset(tt.email, tt.phone, "the-token")
+
+			if tt.expectErr && err == nil {
+				t.Fatal("expected an error, got nil")
+			}
+
+			if !tt.expectErr && err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+
+			if len(pub.calls) != len(tt.expectedCalls) {
+				t.Fatalf("expected %d publish calls, got %d: %+v", len(tt.expectedCalls), len(pub.calls), pub.calls)
+			}
+
+			for i, want := range tt.expectedCalls {
+				got := pub.calls[i]
+
+				if got.queue != want.queue {
+					t.Errorf("call %d: expected queue %q, got %q", i, want.queue, got.queue)
+				}
+
+				if got.payload != want.payload {
+					t.Errorf("call %d: expected payload %+v, got %+v", i, want.payload, got.payload)
+				}
+			}
 		})
 	}
 }
