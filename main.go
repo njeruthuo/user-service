@@ -14,6 +14,7 @@ import (
 	"github.com/njeruthuo/user-service/logs"
 	"github.com/njeruthuo/user-service/messaging"
 	"github.com/njeruthuo/user-service/passwdmgt"
+	"github.com/njeruthuo/user-service/verification"
 )
 
 func main() {
@@ -33,6 +34,10 @@ func main() {
 	}
 	defer mq.Close()
 
+	verification := verification.DBHandler{
+		DB: db,
+	}
+
 	authHandler := authentication.DBHandler{
 		DB: db,
 	}
@@ -50,6 +55,9 @@ func main() {
 	router.Use(logs.Middleware(mq))
 
 	router.HandleFunc("/health", health.GetHealth).Methods(http.MethodGet)
+
+	router.HandleFunc("/verify/{type}", verification.VerificationHandler).Methods(http.MethodPost)
+
 	router.HandleFunc("/auth/login", authHandler.LoginHandler).Methods(http.MethodPost)
 	router.HandleFunc("/auth/logout", authHandler.LogoutHandler).Methods(http.MethodPost)
 	router.HandleFunc("/auth/register", authHandler.RegisterHandler).Methods(http.MethodPost)
