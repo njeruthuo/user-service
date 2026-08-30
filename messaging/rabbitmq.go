@@ -11,6 +11,8 @@ import (
 const (
 	PasswordResetEmailQueue = "password_reset_email"
 	PasswordResetSMSQueue   = "password_reset_sms"
+	VerificationEmailQueue  = "verification_email"
+	VerificationSMSQueue    = "verification_sms"
 	AuditLogQueue           = "audit_logs"
 )
 

@@ -15,6 +15,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"github.com/njeruthuo/user-service/datatypes"
 	"github.com/njeruthuo/user-service/utils"
 )
 
@@ -97,7 +98,7 @@ func Test_Register_No_Account_Duplicates(t *testing.T) {
 			t.Errorf("expected status %d, got %d", http.StatusCreated, w.Code)
 		}
 
-		var res UserResponse
+		var res datatypes.UserResponse
 		if err := json.NewDecoder(w.Body).Decode(&res); err != nil {
 			t.Fatalf("failed to decode response: %v", err)
 		}

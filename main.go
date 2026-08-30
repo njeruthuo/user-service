@@ -36,6 +36,7 @@ func main() {
 
 	verification := verification.DBHandler{
 		DB: db,
+		MQ: mq,
 	}
 
 	authHandler := authentication.DBHandler{
@@ -56,7 +57,7 @@ func main() {
 
 	router.HandleFunc("/health", health.GetHealth).Methods(http.MethodGet)
 
-	router.HandleFunc("/verify/{type}", verification.VerificationHandler).Methods(http.MethodPost)
+	router.HandleFunc("/verify", verification.VerificationHandler).Methods(http.MethodPost)
 
 	router.HandleFunc("/auth/login", authHandler.LoginHandler).Methods(http.MethodPost)
 	router.HandleFunc("/auth/logout", authHandler.LogoutHandler).Methods(http.MethodPost)
