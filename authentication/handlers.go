@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	_ "github.com/lib/pq"
+	"github.com/njeruthuo/user-service/datatypes"
 	"github.com/njeruthuo/user-service/utils"
 )
 
@@ -28,17 +29,6 @@ type RegisterRequest struct {
 	Phone       string `json:"phone"`
 	Password    string `json:"password"`
 	LoginMethod string `json:"loginMethod"`
-}
-
-type UserResponse struct {
-	ID            uuid.UUID `json:"id"`
-	Email         string    `json:"email"`
-	Phone         string    `json:"phone"`
-	Status        string    `json:"status"`
-	PhoneVerified bool      `json:"phone_verified"`
-	EmailVerified bool      `json:"email_verified"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 type UserLoginResponse struct {
@@ -108,7 +98,7 @@ func (h *DBHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var user UserResponse
+	var user datatypes.UserResponse
 
 	err = h.DB.QueryRow(
 		`
@@ -192,7 +182,7 @@ func (h *DBHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		userUser UserResponse
+		userUser datatypes.UserResponse
 		query    string
 		arg      string
 	)
@@ -348,7 +338,7 @@ func (h *DBHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) 
 
 	// Claims are only as fresh as the token, so identity and status are
 	// re-read from the users table before minting a new pair.
-	var user UserResponse
+	var user datatypes.UserResponse
 	user.ID = userID
 
 	err = h.DB.QueryRow(
