@@ -144,7 +144,7 @@ func doChange(t *testing.T, handler *DBHandler, authorization, payload string) *
 func decodeMessage(t *testing.T, w *httptest.ResponseRecorder) string {
 	t.Helper()
 
-	var res JsonResponse
+	var res utils.ResponseType
 	if err := json.NewDecoder(w.Body).Decode(&res); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
