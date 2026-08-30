@@ -70,10 +70,6 @@ func (handler *DBHandler) DeliverPasswordReset(email, phone, token string) error
 	return errors.Join(errs...)
 }
 
-type JsonResponse struct {
-	Message string
-}
-
 type ForgotPasswordRequest struct {
 	Email string `json:"email"`
 	Phone string `json:"phone"`
@@ -97,15 +93,6 @@ var newResetToken = func() (string, error) {
 	}
 
 	return base64.RawURLEncoding.EncodeToString(raw), nil
-}
-
-func writeJSONMessage(w http.ResponseWriter, status int, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-
-	json.NewEncoder(w).Encode(JsonResponse{
-		Message: message,
-	})
 }
 
 // validatePassword reports why a password is unusable, or an empty string when
@@ -167,7 +154,7 @@ func (h *DBHandler) ForgotPasswordHandler(w http.ResponseWriter, r *http.Request
 	var req ForgotPasswordRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONMessage(w, http.StatusBadRequest, "Invalid request body")
+		utils.WriteJSON(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
@@ -176,7 +163,7 @@ func (h *DBHandler) ForgotPasswordHandler(w http.ResponseWriter, r *http.Request
 	switch {
 	case req.Email != "":
 		if !utils.IsValidEmail(req.Email) {
-			writeJSONMessage(w, http.StatusBadRequest, "Invalid email")
+			utils.WriteJSON(w, http.StatusBadRequest, "Invalid email")
 			return
 		}
 
@@ -185,7 +172,7 @@ func (h *DBHandler) ForgotPasswordHandler(w http.ResponseWriter, r *http.Request
 
 	case req.Phone != "":
 		if !utils.IsValidPhone(req.Phone) {
-			writeJSONMessage(w, http.StatusBadRequest, "Invalid phone")
+			utils.WriteJSON(w, http.StatusBadRequest, "Invalid phone")
 			return
 		}
 
@@ -193,7 +180,7 @@ func (h *DBHandler) ForgotPasswordHandler(w http.ResponseWriter, r *http.Request
 		arg = req.Phone
 
 	default:
-		writeJSONMessage(w, http.StatusBadRequest, "Email or phone is required")
+		utils.WriteJSON(w, http.StatusBadRequest, "Email or phone is required")
 		return
 	}
 
@@ -207,17 +194,17 @@ func (h *DBHandler) ForgotPasswordHandler(w http.ResponseWriter, r *http.Request
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeJSONMessage(w, http.StatusOK, resetRequestedMessage)
+			utils.WriteJSON(w, http.StatusOK, resetRequestedMessage)
 			return
 		}
 
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	token, err := newResetToken()
 	if err != nil {
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
@@ -229,7 +216,7 @@ func (h *DBHandler) ForgotPasswordHandler(w http.ResponseWriter, r *http.Request
 		userID,
 		passwordResetType,
 	); err != nil {
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
@@ -247,13 +234,13 @@ func (h *DBHandler) ForgotPasswordHandler(w http.ResponseWriter, r *http.Request
 		utils.HashToken(token),
 		time.Now().Add(ResetTokenTTL),
 	); err != nil {
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	if h.Deliverer == nil {
 		log.Printf("password reset requested for user %s, no deliverer configured", userID)
-		writeJSONMessage(w, http.StatusOK, resetRequestedMessage)
+		utils.WriteJSON(w, http.StatusOK, resetRequestedMessage)
 		return
 	}
 
@@ -261,7 +248,7 @@ func (h *DBHandler) ForgotPasswordHandler(w http.ResponseWriter, r *http.Request
 		log.Printf("failed to deliver password reset for user %s: %v", userID, err)
 	}
 
-	writeJSONMessage(w, http.StatusOK, resetRequestedMessage)
+	utils.WriteJSON(w, http.StatusOK, resetRequestedMessage)
 }
 
 // ResetPasswordHandler completes a reset for a caller holding a token from
@@ -273,17 +260,17 @@ func (h *DBHandler) ResetPasswordHandler(w http.ResponseWriter, r *http.Request)
 	var req ResetPasswordRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONMessage(w, http.StatusBadRequest, "Invalid request body")
+		utils.WriteJSON(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	if req.Token == "" {
-		writeJSONMessage(w, http.StatusBadRequest, "Reset token is required")
+		utils.WriteJSON(w, http.StatusBadRequest, "Reset token is required")
 		return
 	}
 
 	if message := utils.ValidatePassword(req.NewPassword); message != "" {
-		writeJSONMessage(w, http.StatusBadRequest, message)
+		utils.WriteJSON(w, http.StatusBadRequest, message)
 		return
 	}
 
@@ -305,30 +292,30 @@ func (h *DBHandler) ResetPasswordHandler(w http.ResponseWriter, r *http.Request)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeJSONMessage(w, http.StatusUnauthorized, "Invalid or expired reset token")
+			utils.WriteJSON(w, http.StatusUnauthorized, "Invalid or expired reset token")
 			return
 		}
 
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	// A spent or lapsed token is answered the same way as an unknown one, so
 	// the response says nothing about which tokens have ever existed.
 	if usedAt.Valid || time.Now().After(expiresAt) {
-		writeJSONMessage(w, http.StatusUnauthorized, "Invalid or expired reset token")
+		utils.WriteJSON(w, http.StatusUnauthorized, "Invalid or expired reset token")
 		return
 	}
 
 	passwordHash, err := utils.PasswordDigest(req.NewPassword)
 	if err != nil {
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	tx, err := h.DB.Begin()
 	if err != nil {
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
@@ -345,32 +332,32 @@ func (h *DBHandler) ResetPasswordHandler(w http.ResponseWriter, r *http.Request)
 	)
 
 	if err != nil {
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	if rowsAffected == 0 {
-		writeJSONMessage(w, http.StatusUnauthorized, "Invalid or expired reset token")
+		utils.WriteJSON(w, http.StatusUnauthorized, "Invalid or expired reset token")
 		return
 	}
 
 	if err := setPassword(tx, userID, passwordHash); err != nil {
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
-	writeJSONMessage(w, http.StatusOK, "Password has been reset")
+	utils.WriteJSON(w, http.StatusOK, "Password has been reset")
 }
 
 // ChangePasswordHandler changes the password of the caller identified by the
@@ -381,48 +368,48 @@ func (h *DBHandler) ChangePasswordHandler(w http.ResponseWriter, r *http.Request
 
 	token := bearerToken(r)
 	if token == "" {
-		writeJSONMessage(w, http.StatusUnauthorized, "Authorization required")
+		utils.WriteJSON(w, http.StatusUnauthorized, "Authorization required")
 		return
 	}
 
 	claims, err := utils.ParseToken(token)
 	if err != nil {
-		writeJSONMessage(w, http.StatusUnauthorized, "Invalid access token")
+		utils.WriteJSON(w, http.StatusUnauthorized, "Invalid access token")
 		return
 	}
 
 	// A refresh token identifies a session, not a request, and must not stand
 	// in for the access token here.
 	if claims.TokenType != utils.AccessTokenType {
-		writeJSONMessage(w, http.StatusUnauthorized, "Invalid access token")
+		utils.WriteJSON(w, http.StatusUnauthorized, "Invalid access token")
 		return
 	}
 
 	userID, err := uuid.Parse(claims.Subject)
 	if err != nil {
-		writeJSONMessage(w, http.StatusUnauthorized, "Invalid access token")
+		utils.WriteJSON(w, http.StatusUnauthorized, "Invalid access token")
 		return
 	}
 
 	var req ChangePasswordRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONMessage(w, http.StatusBadRequest, "Invalid request body")
+		utils.WriteJSON(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	if req.CurrentPassword == "" {
-		writeJSONMessage(w, http.StatusBadRequest, "Current password is required")
+		utils.WriteJSON(w, http.StatusBadRequest, "Current password is required")
 		return
 	}
 
 	if message := utils.ValidatePassword(req.NewPassword); message != "" {
-		writeJSONMessage(w, http.StatusBadRequest, message)
+		utils.WriteJSON(w, http.StatusBadRequest, message)
 		return
 	}
 
 	if req.NewPassword == req.CurrentPassword {
-		writeJSONMessage(w, http.StatusBadRequest, "New password must differ from the current one")
+		utils.WriteJSON(w, http.StatusBadRequest, "New password must differ from the current one")
 		return
 	}
 
@@ -443,47 +430,47 @@ func (h *DBHandler) ChangePasswordHandler(w http.ResponseWriter, r *http.Request
 		// The token parsed but names nobody, so treat it as the stale
 		// credential it is rather than as a server fault.
 		if errors.Is(err, sql.ErrNoRows) {
-			writeJSONMessage(w, http.StatusUnauthorized, "Invalid access token")
+			utils.WriteJSON(w, http.StatusUnauthorized, "Invalid access token")
 			return
 		}
 
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	if status != "active" {
-		writeJSONMessage(w, http.StatusForbidden, "Account is not active")
+		utils.WriteJSON(w, http.StatusForbidden, "Account is not active")
 		return
 	}
 
 	if !utils.CheckPasswordHash(req.CurrentPassword, currentHash) {
-		writeJSONMessage(w, http.StatusUnauthorized, "Current password is incorrect")
+		utils.WriteJSON(w, http.StatusUnauthorized, "Current password is incorrect")
 		return
 	}
 
 	passwordHash, err := utils.PasswordDigest(req.NewPassword)
 	if err != nil {
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	tx, err := h.DB.Begin()
 	if err != nil {
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	defer tx.Rollback()
 
 	if err := setPassword(tx, userID, passwordHash); err != nil {
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
-	writeJSONMessage(w, http.StatusOK, "Password has been changed")
+	utils.WriteJSON(w, http.StatusOK, "Password has been changed")
 }
