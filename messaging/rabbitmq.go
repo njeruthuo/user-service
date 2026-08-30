@@ -8,12 +8,12 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-// Queue names double as routing keys on the default exchange: each queue
-// gets an implicit binding keyed on its own name, so publishing to exchange
-// "" with key <queue name> delivers straight to that queue.
 const (
 	PasswordResetEmailQueue = "password_reset_email"
 	PasswordResetSMSQueue   = "password_reset_sms"
+	VerificationEmailQueue  = "verification_email"
+	VerificationSMSQueue    = "verification_sms"
+	AuditLogQueue           = "audit_logs"
 )
 
 type RabbitMQ struct {
@@ -52,7 +52,6 @@ func (r *RabbitMQ) Close() {
 func (r *RabbitMQ) String() string {
 	return "Rabbitmq connected"
 }
-
 
 func (r *RabbitMQ) PublishJSON(queueName string, payload any) error {
 	if _, err := r.Ch.QueueDeclare(
