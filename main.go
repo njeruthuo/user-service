@@ -58,6 +58,7 @@ func main() {
 	router.HandleFunc("/health", health.GetHealth).Methods(http.MethodGet)
 
 	router.HandleFunc("/verify", verification.VerificationHandler).Methods(http.MethodPost)
+	router.HandleFunc("/verify/confirm", verification.ConfirmVerificationHandler).Methods(http.MethodPost)
 
 	router.HandleFunc("/auth/login", authHandler.LoginHandler).Methods(http.MethodPost)
 	router.HandleFunc("/auth/logout", authHandler.LogoutHandler).Methods(http.MethodPost)

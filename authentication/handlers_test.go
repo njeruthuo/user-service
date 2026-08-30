@@ -66,7 +66,7 @@ func Test_Register_Requires_Email_And_Phone(t *testing.T) {
 				t.Errorf("expected %d, got %d", tt.expectedStatus, w.Code)
 			}
 
-			var res AuthJsonResponse
+			var res utils.ResponseType
 			if err := json.NewDecoder(w.Body).Decode(&res); err != nil {
 				t.Fatalf("failed to decode response: %v", err)
 			}
@@ -329,7 +329,7 @@ func doLogin(t *testing.T, handler *DBHandler, payload string) *httptest.Respons
 func decodeMessage(t *testing.T, w *httptest.ResponseRecorder) string {
 	t.Helper()
 
-	var res AuthJsonResponse
+	var res utils.ResponseType
 	if err := json.NewDecoder(w.Body).Decode(&res); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}

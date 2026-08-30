@@ -20,10 +20,6 @@ type DBHandler struct {
 	DB *sql.DB
 }
 
-type AuthJsonResponse struct {
-	Message string
-}
-
 type RegisterRequest struct {
 	Email       string `json:"email"`
 	Phone       string `json:"phone"`
@@ -62,39 +58,30 @@ func storeRefreshToken(db sqlExecutor, userID uuid.UUID, refreshToken string) er
 	return err
 }
 
-func writeJSONMessage(w http.ResponseWriter, status int, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-
-	json.NewEncoder(w).Encode(AuthJsonResponse{
-		Message: message,
-	})
-}
-
 func (h *DBHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	var req RegisterRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONMessage(w, http.StatusBadRequest, "Invalid request body")
+		utils.WriteJSON(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	if !utils.IsValidEmail(req.Email) || !utils.IsValidPhone(req.Phone) {
-		writeJSONMessage(w, http.StatusBadRequest, "Invalid phone or email")
+		utils.WriteJSON(w, http.StatusBadRequest, "Invalid phone or email")
 		return
 	}
 
 	if message := utils.ValidatePassword(req.Password); message != "" {
-		writeJSONMessage(w, http.StatusBadRequest, message)
+		utils.WriteJSON(w, http.StatusBadRequest, message)
 		return
 	}
 
 	passwordHash, err := utils.PasswordDigest(req.Password)
 
 	if err != nil {
-		writeJSONMessage(w, http.StatusBadRequest, "Bad password")
+		utils.WriteJSON(w, http.StatusBadRequest, "Bad password")
 		return
 	}
 
@@ -134,19 +121,19 @@ func (h *DBHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
 			switch pqErr.Constraint {
 			case "users_email_key":
-				writeJSONMessage(w, http.StatusConflict, "Email is already registered")
+				utils.WriteJSON(w, http.StatusConflict, "Email is already registered")
 
 			case "users_phone_key":
-				writeJSONMessage(w, http.StatusConflict, "Phone number is already registered")
+				utils.WriteJSON(w, http.StatusConflict, "Phone number is already registered")
 
 			default:
-				writeJSONMessage(w, http.StatusConflict, "User already exists")
+				utils.WriteJSON(w, http.StatusConflict, "User already exists")
 			}
 
 			return
 		}
 
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
@@ -165,18 +152,18 @@ func (h *DBHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	var loginRequest RegisterRequest
 	err := json.NewDecoder(r.Body).Decode(&loginRequest)
 	if err != nil {
-		writeJSONMessage(w, http.StatusBadRequest, "Invalid request body")
+		utils.WriteJSON(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	if loginRequest.LoginMethod == "email" {
 		if !utils.IsValidEmail(loginRequest.Email) {
-			writeJSONMessage(w, http.StatusBadRequest, "Invalid email")
+			utils.WriteJSON(w, http.StatusBadRequest, "Invalid email")
 			return
 		}
 	} else {
 		if !utils.IsValidPhone(loginRequest.Phone) {
-			writeJSONMessage(w, http.StatusBadRequest, "Invalid phone")
+			utils.WriteJSON(w, http.StatusBadRequest, "Invalid phone")
 			return
 		}
 	}
@@ -218,21 +205,21 @@ func (h *DBHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		if errors.Is(err, sql.ErrNoRows) {
-			writeJSONMessage(w, http.StatusUnauthorized, "Invalid credentials")
+			utils.WriteJSON(w, http.StatusUnauthorized, "Invalid credentials")
 			return
 		}
 
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	if !utils.CheckPasswordHash(loginRequest.Password, passwordHash) {
-		writeJSONMessage(w, http.StatusUnauthorized, "Invalid credentials")
+		utils.WriteJSON(w, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
 
 	if userUser.Status != "active" {
-		writeJSONMessage(w, http.StatusForbidden, "Account is not active")
+		utils.WriteJSON(w, http.StatusForbidden, "Account is not active")
 		return
 	}
 
@@ -243,12 +230,12 @@ func (h *DBHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	if err := storeRefreshToken(h.DB, userUser.ID, tokens.RefreshToken); err != nil {
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
@@ -267,24 +254,24 @@ func (h *DBHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) 
 	var req RefreshTokenRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONMessage(w, http.StatusBadRequest, "Invalid request body")
+		utils.WriteJSON(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	if req.RefreshToken == "" {
-		writeJSONMessage(w, http.StatusBadRequest, "Refresh token is required")
+		utils.WriteJSON(w, http.StatusBadRequest, "Refresh token is required")
 		return
 	}
 
 	claims, err := utils.ParseToken(req.RefreshToken)
 	if err != nil {
-		writeJSONMessage(w, http.StatusUnauthorized, "Invalid refresh token")
+		utils.WriteJSON(w, http.StatusUnauthorized, "Invalid refresh token")
 		return
 	}
 
 	// An access token must not be redeemable as a refresh token.
 	if claims.TokenType != utils.RefreshTokenType {
-		writeJSONMessage(w, http.StatusUnauthorized, "Invalid refresh token")
+		utils.WriteJSON(w, http.StatusUnauthorized, "Invalid refresh token")
 		return
 	}
 
@@ -305,11 +292,11 @@ func (h *DBHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) 
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeJSONMessage(w, http.StatusUnauthorized, "Invalid refresh token")
+			utils.WriteJSON(w, http.StatusUnauthorized, "Invalid refresh token")
 			return
 		}
 
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
@@ -323,16 +310,16 @@ func (h *DBHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) 
 			WHERE user_id = $1 AND revoked_at IS NULL`,
 			userID,
 		); err != nil {
-			writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+			utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}
 
-		writeJSONMessage(w, http.StatusUnauthorized, "Invalid refresh token")
+		utils.WriteJSON(w, http.StatusUnauthorized, "Invalid refresh token")
 		return
 	}
 
 	if time.Now().After(expiresAt) {
-		writeJSONMessage(w, http.StatusUnauthorized, "Refresh token has expired")
+		utils.WriteJSON(w, http.StatusUnauthorized, "Refresh token has expired")
 		return
 	}
 
@@ -351,28 +338,28 @@ func (h *DBHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) 
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeJSONMessage(w, http.StatusUnauthorized, "Invalid refresh token")
+			utils.WriteJSON(w, http.StatusUnauthorized, "Invalid refresh token")
 			return
 		}
 
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	if user.Status != "active" {
-		writeJSONMessage(w, http.StatusForbidden, "Account is not active")
+		utils.WriteJSON(w, http.StatusForbidden, "Account is not active")
 		return
 	}
 
 	tokens, err := utils.GenerateTokenPair(user.ID.String(), user.Email, user.Phone)
 	if err != nil {
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	tx, err := h.DB.Begin()
 	if err != nil {
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
@@ -389,28 +376,28 @@ func (h *DBHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) 
 	)
 
 	if err != nil {
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	if rowsAffected == 0 {
-		writeJSONMessage(w, http.StatusUnauthorized, "Invalid refresh token")
+		utils.WriteJSON(w, http.StatusUnauthorized, "Invalid refresh token")
 		return
 	}
 
 	if err := storeRefreshToken(tx, userID, tokens.RefreshToken); err != nil {
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
@@ -429,23 +416,23 @@ func (h *DBHandler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	var req RefreshTokenRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONMessage(w, http.StatusBadRequest, "Invalid request body")
+		utils.WriteJSON(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	if req.RefreshToken == "" {
-		writeJSONMessage(w, http.StatusBadRequest, "Refresh token is required")
+		utils.WriteJSON(w, http.StatusBadRequest, "Refresh token is required")
 		return
 	}
 
 	claims, err := utils.ParseToken(req.RefreshToken)
 	if err != nil {
-		writeJSONMessage(w, http.StatusUnauthorized, "Invalid refresh token")
+		utils.WriteJSON(w, http.StatusUnauthorized, "Invalid refresh token")
 		return
 	}
 
 	if claims.TokenType != utils.RefreshTokenType {
-		writeJSONMessage(w, http.StatusUnauthorized, "Invalid refresh token")
+		utils.WriteJSON(w, http.StatusUnauthorized, "Invalid refresh token")
 		return
 	}
 
@@ -456,9 +443,9 @@ func (h *DBHandler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 		WHERE token_hash = $1 AND revoked_at IS NULL`,
 		utils.HashToken(req.RefreshToken),
 	); err != nil {
-		writeJSONMessage(w, http.StatusInternalServerError, "Internal server error")
+		utils.WriteJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
-	writeJSONMessage(w, http.StatusOK, "Logged out successfully")
+	utils.WriteJSON(w, http.StatusOK, "Logged out successfully")
 }
