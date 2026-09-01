@@ -1,0 +1,13 @@
+name: Docker Build
+
+on:
+    push:
+        branches:
+            - main
+
+jobs:
+    docker:
+        uses: njeruthuo/github-actions-workflows/.github/workflows/build-publish-docker.yaml@main
+        permissions:
+            contents: read
+            packages: write
