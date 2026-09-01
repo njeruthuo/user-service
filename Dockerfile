@@ -9,7 +9,7 @@ RUN go mod download
 ARG TARGETOS
 ARG TARGETARCH
 
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go run build -o /out/usr-svc .
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go run build -o /out/usr-svc
 
 FROM gcr.io/distroless/static:nonroot
 
