@@ -68,6 +68,6 @@ func main() {
 	router.HandleFunc("/auth/reset-password", passwdHandler.ResetPasswordHandler).Methods(http.MethodPost)
 	router.HandleFunc("/auth/change-password", passwdHandler.ChangePasswordHandler).Methods(http.MethodPost)
 
-	log.Println("System starting at port 8000")
-	log.Fatal(http.ListenAndServe(":8000", router))
+	log.Println("System starting at port 8080")
+	log.Fatal(http.ListenAndServe(":8080", router))
 }
