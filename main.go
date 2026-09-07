@@ -55,7 +55,7 @@ func main() {
 	// Every request, on every route below, is recorded to the audit log.
 	router.Use(logs.Middleware(mq))
 
-	router.HandleFunc("/health", health.GetHealth).Methods(http.MethodGet)
+	router.HandleFunc("/healthz", health.GetHealth).Methods(http.MethodGet)
 
 	router.HandleFunc("/verify", verification.VerificationHandler).Methods(http.MethodPost)
 	router.HandleFunc("/verify/confirm", verification.ConfirmVerificationHandler).Methods(http.MethodPost)
