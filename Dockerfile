@@ -17,7 +17,7 @@ FROM gcr.io/distroless/static:nonroot
 
 COPY --from=builder /out/usr-svc /usr-svc
 
-EXPOSE 8000
+EXPOSE 8080
 
 USER nonroot
 
